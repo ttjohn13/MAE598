@@ -11,9 +11,11 @@ from torch import optim
 from torch.nn import utils
 import matplotlib.pyplot as plt
 
+t.manual_seed(0)
+
 logger = logging.getLogger(__name__)
 
-FRAME_TIME = 1
+FRAME_TIME = 1.0
 GRAVITY_ACCEL = 9.81 / 1000
 BOOST_ACCEL = 14.715 / 1000
 L_center_of_gravity = 5 / 1000
@@ -109,7 +111,7 @@ class Simulation(nn.Module):
 
     @staticmethod
     def initialize_state():
-        state = [1.000, 0, -0.025, 0, 0, 0.] # need initial conditions
+        state = [1.000, -0.01, .025, -0.001, 0., -0.01] # need initial conditions
         return t.tensor(state, requires_grad=False).float()
 
     def error(self, state, state_trajectory):
@@ -123,7 +125,7 @@ class Optimize:
     def __init__(self, simulation):
         self.simulation = simulation
         self.parameters = simulation.controller.parameters()
-        self.optimizer = optim.LBFGS(self.parameters, lr=0.08)
+        self.optimizer = optim.LBFGS(self.parameters, lr=0.1)
 
     def step(self):
         def closure():

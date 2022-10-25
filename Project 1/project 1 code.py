@@ -11,14 +11,16 @@ from torch import optim
 from torch.nn import utils
 import matplotlib.pyplot as plt
 
+t.manual_seed(0)
+
 logger = logging.getLogger(__name__)
 
-FRAME_TIME = 0.5
-GRAVITY_ACCEL = 9.81
-BOOST_ACCEL = 14.715
-L_center_of_gravity = 5
+FRAME_TIME = 1.0
+GRAVITY_ACCEL = 9.81 / 1000
+BOOST_ACCEL = 14.715 / 1000
+L_center_of_gravity = 5 / 1000
 
-PLATFORM_WIDTH = 25
+PLATFORM_WIDTH = 25 / 1000
 
 
 class Dynmaics(nn.Module):
@@ -74,12 +76,16 @@ class Controller(nn.Module):
             nn.Linear(dim_input, dim_hidden),
             nn.Tanh(),
             nn.Linear(dim_hidden, dim_output),
+            nn.Sigmoid(),
+            nn.Linear(dim_output, dim_input),
+            nn.Tanh(),
+            nn.Linear(dim_input, dim_output),
             nn.Tanh()
         )
 
     def forward(self, state):
-        A = self.network(state)
-        action = A / 2 + t.tensor([0.5, 0.])
+        action = self.network(state)
+        action = action /2 + t.tensor([0.5, 0.])
         return action
 
 
@@ -106,23 +112,26 @@ class Simulation(nn.Module):
 
     @staticmethod
     def initialize_state():
-        state = [1000, 0., -25, 0, 0., 0.]  # need initial conditions
+        state = [1.000, -0.01, .025, -0.001, 0., -0.01]  # need initial conditions
         return t.tensor(state, requires_grad=False).float()
 
     def error(self, state, state_trajectory):
-        termination_error = (state[0] - L_center_of_gravity) ** 2 + state[1] ** 2 + state[2] ** 2 + state[
-            3] ** 2 + 100 * state[4] ** 2 + 400 * state[5] ** 2
-        stack_of_trajectory = t.stack(state_trajectory)
-        squared_error = t.matmul(t.transpose(stack_of_trajectory, 0, 1), stack_of_trajectory)
-        transient_error = squared_error[4, 4]
-        return termination_error  # + transient_error
+        termination_error = 10 * (state[0] - L_center_of_gravity) ** 2 + 10 * state[1] ** 2 + state[2] ** 2 + state[3] ** 2 + state[4] ** 2 + 4 * state[5] ** 2
+        stack_state_traj = t.stack(state_trajectory)
+        x_location = stack_state_traj[:-1, 2]
+        angle = stack_state_traj[:-1, 4]
+        y_speed = stack_state_traj[-5:-1, 1]
+        y_speed_error_squared = t.matmul(t.t(y_speed), y_speed)
+        transition_error = 0.03 * t.matmul(t.t(x_location), x_location) + 0.1 * t.matmul(t.t(angle), angle) + 0.2 * y_speed_error_squared
+
+        return termination_error + transition_error
 
 
 class Optimize:
     def __init__(self, simulation):
         self.simulation = simulation
         self.parameters = simulation.controller.parameters()
-        self.optimizer = optim.LBFGS(self.parameters, lr=0.05)
+        self.optimizer = optim.LBFGS(self.parameters, lr=0.08)
 
     def step(self):
         def closure():
@@ -137,7 +146,7 @@ class Optimize:
     def train(self, epochs):
         for epoch in range(epochs):
             loss = self.step()
-            print('[%d] loss: %.3f' % (epoch + 1, loss))
+            print('[%d] loss: %.5f' % (epoch + 1, loss))
             self.visualize()
 
     def visualize(self):
@@ -164,7 +173,7 @@ class Optimize:
         plt.legend
 
 
-T = 40
+T = 20
 dim_input = 6
 dim_hidden = 12
 dim_output = 2
@@ -172,4 +181,4 @@ d = Dynmaics()
 c = Controller(dim_input, dim_hidden, dim_output)
 s = Simulation(c, d, T)
 o = Optimize(s)
-o.train(100)
+o.train(500)
