@@ -116,8 +116,8 @@ class Simulation(nn.Module):
     def error(self, state, state_trajectory):
         termination_error = 10 * (state[0] - L_center_of_gravity)**2 + 2 * state[1]**2 + state[2]**2 + state[3]**2 + state[4]**2 + 4 * state[5]**2
         stack_of_trajectory = t.stack(state_trajectory)
-        squeared_error = t.matmul(t.transpose(stack_of_trajectory, 0, 1), stack_of_trajectory)
-        transient_error = squeared_error[4, 4]
+        squared_error = t.matmul(t.transpose(stack_of_trajectory, 0, 1), stack_of_trajectory)
+        transient_error = squared_error[4, 4]
         return termination_error + transient_error
 
 class Optimize:
