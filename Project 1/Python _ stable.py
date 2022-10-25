@@ -13,13 +13,12 @@ import matplotlib.pyplot as plt
 
 logger = logging.getLogger(__name__)
 
-FRAME_TIME = 0.5
-GRAVITY_ACCEL = 9.81
-BOOST_ACCEL = 14.715
-L_center_of_gravity = 5
+FRAME_TIME = 1
+GRAVITY_ACCEL = 9.81 / 1000
+BOOST_ACCEL = 14.715 / 1000
+L_center_of_gravity = 5 / 1000
 
-PLATFORM_WIDTH = 25
-
+PLATFORM_WIDTH = 25 / 1000
 
 class Dynmaics(nn.Module):
 
@@ -28,6 +27,7 @@ class Dynmaics(nn.Module):
 
     @staticmethod
     def forward(state, action):
+
         """
         action[0]: thrust
         action[1]: phi of thrust
@@ -40,8 +40,8 @@ class Dynmaics(nn.Module):
         """
         delta_state_gravity = t.tensor([0., -GRAVITY_ACCEL * FRAME_TIME, 0., 0., 0., 0])
 
-        # Thrust and omega Calculations
-        state_tensor = torch.zeros((6, 2))
+        #Thrust and omega Calculations
+        state_tensor = torch.zeros((6,2))
         state_tensor[1, 0] = torch.cos(state[4] + action[1])
         state_tensor[3, 0] = torch.sin(state[4] + action[1])
         state_tensor[5, 1] = 4 / L_center_of_gravity * t.sin(action[1]) * action[0]
@@ -50,7 +50,7 @@ class Dynmaics(nn.Module):
         state = state + delta_state_thrust + delta_state_gravity
 
         step_mat = t.tensor([[1., FRAME_TIME, 0., 0., 0., 0.],
-                             [0., 1., 0., 0., 0., 0.],
+                            [0., 1., 0., 0., 0., 0.],
                              [0., 0., 1., FRAME_TIME, 0., 0.],
                              [0., 0., 0., 1., 0., 0.],
                              [0., 0., 0., 0., 1., FRAME_TIME],
@@ -58,7 +58,6 @@ class Dynmaics(nn.Module):
         state = t.t(t.matmul(step_mat, state.t()))
 
         return state
-
 
 class Controller(nn.Module):
 
@@ -74,12 +73,16 @@ class Controller(nn.Module):
             nn.Linear(dim_input, dim_hidden),
             nn.Tanh(),
             nn.Linear(dim_hidden, dim_output),
+            nn.Sigmoid(),
+            nn.Linear(dim_output, dim_input),
+            nn.Tanh(),
+            nn.Linear(dim_input, dim_output),
             nn.Tanh()
         )
 
+
     def forward(self, state):
-        A = self.network(state)
-        action = A / 2 + t.tensor([0.5, 0.])
+        action = self.network(state)
         return action
 
 
@@ -106,23 +109,21 @@ class Simulation(nn.Module):
 
     @staticmethod
     def initialize_state():
-        state = [1000, 0., -25, 0, 0., 0.]  # need initial conditions
+        state = [1.000, 0, -0.025, 0, 0, 0.] # need initial conditions
         return t.tensor(state, requires_grad=False).float()
 
     def error(self, state, state_trajectory):
-        termination_error = (state[0] - L_center_of_gravity) ** 2 + state[1] ** 2 + state[2] ** 2 + state[
-            3] ** 2 + 100 * state[4] ** 2 + 400 * state[5] ** 2
-        stack_of_trajectory = t.stack(state_trajectory)
-        squared_error = t.matmul(t.transpose(stack_of_trajectory, 0, 1), stack_of_trajectory)
-        transient_error = squared_error[4, 4]
-        return termination_error  # + transient_error
-
+        termination_error = 10 * (state[0] - L_center_of_gravity)**2 + 2 * state[1]**2 + state[2]**2 + state[3]**2 + state[4]**2 + 4 * state[5]**2
+        #boolean = state_trajectory[:, 0] <= 0
+        #boolean = 1 * boolean
+        #transient_error = t.matmul( t.transpose(boolean, 0, 1), state_trajectory[:,1]) **2
+        return termination_error
 
 class Optimize:
     def __init__(self, simulation):
         self.simulation = simulation
         self.parameters = simulation.controller.parameters()
-        self.optimizer = optim.LBFGS(self.parameters, lr=0.05)
+        self.optimizer = optim.LBFGS(self.parameters, lr=0.08)
 
     def step(self):
         def closure():
@@ -130,7 +131,6 @@ class Optimize:
             self.optimizer.zero_grad()
             loss.backward()
             return loss
-
         self.optimizer.step(closure)
         return closure()
 
@@ -145,10 +145,10 @@ class Optimize:
         y = data[:, 0]
         y_dot = data[:, 1]
         x = data[:, 2]
-        x_dot = data[:, 3]
-        theta = data[:, 4]
+        x_dot = data[:,3]
+        theta = data[:,4]
         omega = data[:, 5]
-        fig, axs = plt.subplots(3, 1)
+        fig, axs = plt.subplots(3,1)
         axs[0].plot(y, y_dot)
         axs[0].set_xlabel('Vertical Distance to Ground')
         axs[0].set_ylabel('Vertical Speed')
@@ -164,7 +164,7 @@ class Optimize:
         plt.legend
 
 
-T = 40
+T = 20
 dim_input = 6
 dim_hidden = 12
 dim_output = 2
