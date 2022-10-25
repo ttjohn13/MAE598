@@ -82,7 +82,8 @@ class Controller(nn.Module):
 
 
     def forward(self, state):
-        action = self.network(state)
+        A = self.network(state)
+        action = A / 2 + t.tensor([0.5, 0.])
         return action
 
 
@@ -114,10 +115,10 @@ class Simulation(nn.Module):
 
     def error(self, state, state_trajectory):
         termination_error = 10 * (state[0] - L_center_of_gravity)**2 + 2 * state[1]**2 + state[2]**2 + state[3]**2 + state[4]**2 + 4 * state[5]**2
-        #boolean = state_trajectory[:, 0] <= 0
-        #boolean = 1 * boolean
-        #transient_error = t.matmul( t.transpose(boolean, 0, 1), state_trajectory[:,1]) **2
-        return termination_error
+        stack_of_trajectory = t.stack(state_trajectory)
+        squeared_error = t.matmul(t.transpose(stack_of_trajectory, 0, 1), stack_of_trajectory)
+        transient_error = squeared_error[4, 4]
+        return termination_error + transient_error
 
 class Optimize:
     def __init__(self, simulation):
