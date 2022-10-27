@@ -115,8 +115,15 @@ class Simulation(nn.Module):
 
     @staticmethod
     def initialize_state():
-        state = [[1.000, -0.01, .025, -0.001, 0., -0.01],
-                 [0.950, 0., -0.025, -0.002, 0.03, 0.01]]# need initial conditions
+        y = np.random.normal(1.0, 0.05, 3)
+        y_dot = np.random.rand(3) * -0.005
+        x = np.random.normal(0., 0.05, 3)
+        x_dot = np.random.normal(0., 0.005, 3)
+        theta = np.random.normal(0., 0.1, 3)
+        omega = np.random.normal(0., 0.05, 3)
+        state = np.zeros((len(y), 6))
+        for i in range(len(y)):
+            state[i, :] = [y[i], y_dot[i], x[i], x_dot[i], theta[i], omega[i]]# need initial conditions
         return t.tensor(state, requires_grad=False).float()
 
     def error(self, state, state_trajectory):
@@ -127,9 +134,11 @@ class Simulation(nn.Module):
         x_location_error_squared = t.sum(x_location**2, (1, 0))
         angle = stack_state_traj[:-1, :, 4]
         angle_error_squared = t.sum(angle**2, (0, 1))
-        y_speed = stack_state_traj[-5:-1, :, 1]
+        y_speed = stack_state_traj[-4:-1, :, 1]
         y_speed_error_squared = t.sum(y_speed**2, (1, 0))
-        transition_error = 0.03 * x_location_error_squared + 0.1 * angle_error_squared + 0.2 * y_speed_error_squared
+        omega = stack_state_traj[-6:-1, :, 5]
+        omega_error_sq = t.sum(omega**2, (1, 0))
+        transition_error = 0.03 * x_location_error_squared + 0.07 * angle_error_squared + 0.8 * y_speed_error_squared + 0.06 * omega_error_sq
 
         return termination_error + transition_error
 
@@ -138,7 +147,7 @@ class Optimize:
     def __init__(self, simulation):
         self.simulation = simulation
         self.parameters = simulation.controller.parameters()
-        self.optimizer = optim.LBFGS(self.parameters, lr=0.08)
+        self.optimizer = optim.LBFGS(self.parameters, lr=0.0075)
 
     def step(self):
         def closure():
@@ -154,32 +163,47 @@ class Optimize:
         for epoch in range(epochs):
             loss = self.step()
             print('[%d] loss: %.5f' % (epoch + 1, loss))
-            #self.visualize()
+            self.visualize()
 
-    """
+
     def visualize(self):
         data = np.array([self.simulation.state_trajectory[i].detach().numpy() for i in range(self.simulation.T)])
-        y = data[:, 0]
-        y_dot = data[:, 1]
-        x = data[:, 2]
-        x_dot = data[:, 3]
-        theta = data[:, 4]
-        omega = data[:, 5]
-        fig, axs = plt.subplots(3, 1)
-        axs[0].plot(y, y_dot)
-        axs[0].set_xlabel('Vertical Distance to Ground')
-        axs[0].set_ylabel('Vertical Speed')
-        axs[1].plot(y, x, label='Horizontal Distance from Platform')
-        axs[1].plot(y, x_dot, label='Horizontal Speed')
-        axs[1].set_xlabel('Vertical Distance to Ground')
-        axs[1].set_ylabel('x and x_dot')
-        axs[2].plot(y, theta, label='Orientation')
-        axs[2].plot(y, omega, label='Angular Speed')
-        axs[2].set_xlabel('Vertical Distance to Ground')
-        axs[2].set_ylabel('Theta and Omega')
+        N_cond = len(data[0, :, 0])
+        fig = plt.figure(tight_layout=True)
+        import matplotlib.gridspec as grsp
+        gs = grsp.GridSpec(3, 2)
+        axyydot = fig.add_subplot(gs[0, :])
+        axx = fig.add_subplot(gs[1, 0])
+        axxdot = fig.add_subplot(gs[1, 1])
+        axthet = fig.add_subplot(gs[2, 0])
+        axomeg = fig.add_subplot(gs[2, 1])
+        for i in range(N_cond):
+            y = data[:, i, 0]
+            y_dot = data[:, i, 1]
+            x = data[:, i, 2]
+            x_dot = data[:, i, 3]
+            theta = data[:, i, 4]
+            omega = data[:, i, 5]
+
+            axyydot.plot(y, y_dot)
+            axx.plot(y, x)
+            axxdot.plot(y, x_dot)
+            axthet.plot(y, theta)
+            axomeg.plot(y, omega)
+
+        axyydot.set_xlabel('Normalized Vertical Distance')
+        axx.set_xlabel('Normalized Vertical Distance')
+        axxdot.set_xlabel('Normalized Vertical Distance')
+        axthet.set_xlabel('Normalized Vertical Distance')
+        axomeg.set_xlabel('Normalized Vertical Distance')
+        axyydot.set_ylabel('Normalized y_dot')
+        axx.set_ylabel('Normalized x')
+        axxdot.set_ylabel('Normalized x_dot')
+        axthet.set_ylabel('Theta of Rocket')
+        axomeg.set_ylabel('Omega of Rocket')
+        fig.align_labels()
         plt.show()
-        plt.legend
-    """
+
 
 T = 20
 dim_input = 6
@@ -189,4 +213,4 @@ d = Dynmaics()
 c = Controller(dim_input, dim_hidden, dim_output)
 s = Simulation(c, d, T)
 o = Optimize(s)
-o.train(50)
+o.train(200)
