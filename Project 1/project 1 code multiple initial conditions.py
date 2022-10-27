@@ -11,11 +11,11 @@ from torch import optim
 from torch.nn import utils
 import matplotlib.pyplot as plt
 
-t.manual_seed(0)
+t.manual_seed(13)
 
 logger = logging.getLogger(__name__)
 
-FRAME_TIME = 1.0
+FRAME_TIME = 1.5
 GRAVITY_ACCEL = 9.81 / 1000
 BOOST_ACCEL = 14.715 / 1000
 L_center_of_gravity = 5 / 1000
@@ -50,7 +50,7 @@ class Dynmaics(nn.Module):
 
         state_tensor_angle = t.zeros((N, 6))
         state_tensor_angle[:, 5] = 4 / L_center_of_gravity * t.sin(action[:, 1]) * action[:, 0]
-        delta_state_angle = BOOST_ACCEL * FRAME_TIME * torch.mul(state_tensor_angle, action[:, 1].reshape(-1, 1))
+        delta_state_angle = BOOST_ACCEL * FRAME_TIME * state_tensor_angle
 
         state = state + delta_state_thrust + delta_state_gravity + delta_state_angle
 
@@ -115,19 +115,19 @@ class Simulation(nn.Module):
 
     @staticmethod
     def initialize_state():
-        y = np.random.normal(1.0, 0.05, 3)
-        y_dot = np.random.rand(3) * -0.005
-        x = np.random.normal(0., 0.05, 3)
-        x_dot = np.random.normal(0., 0.005, 3)
-        theta = np.random.normal(0., 0.1, 3)
-        omega = np.random.normal(0., 0.05, 3)
+        y = np.random.normal(1.0, 0.05, 5)
+        y_dot = np.random.rand(5) * -0.005
+        x = np.random.normal(0., 0.05, 5)
+        x_dot = np.random.normal(0., 0.005, 5)
+        theta = np.random.normal(0., 0.1, 5)
+        omega = np.random.normal(0., 0.05, 5)
         state = np.zeros((len(y), 6))
         for i in range(len(y)):
             state[i, :] = [y[i], y_dot[i], x[i], x_dot[i], theta[i], omega[i]]# need initial conditions
         return t.tensor(state, requires_grad=False).float()
 
     def error(self, state, state_trajectory):
-        termination_error = 10 * (state[:, 0] - L_center_of_gravity) ** 2 + 10 * state[:, 1] ** 2 + state[:, 2] ** 2 + state[:, 3] ** 2 + state[:, 4] ** 2 + 4 * state[:, 5] ** 2
+        termination_error = 10 * (state[:, 0] - L_center_of_gravity) ** 2 + 10 * state[:, 1] ** 2 + state[:, 2] ** 2 + 2 * state[:, 3] ** 2 + state[:, 4] ** 2 + state[:, 5] ** 2
         termination_error = t.sum(termination_error)
         stack_state_traj = t.stack(state_trajectory)
         x_location = stack_state_traj[:-1, :, 2]
@@ -136,9 +136,12 @@ class Simulation(nn.Module):
         angle_error_squared = t.sum(angle**2, (0, 1))
         y_speed = stack_state_traj[-4:-1, :, 1]
         y_speed_error_squared = t.sum(y_speed**2, (1, 0))
+        y = stack_state_traj[:-1, :, 0]
+        y = t.nn.functional.relu(-(y - L_center_of_gravity))
+        y_squared_error = t.sum(y**2, (1, 0))
         omega = stack_state_traj[-6:-1, :, 5]
         omega_error_sq = t.sum(omega**2, (1, 0))
-        transition_error = 0.03 * x_location_error_squared + 0.07 * angle_error_squared + 0.8 * y_speed_error_squared + 0.06 * omega_error_sq
+        transition_error = 0.03 * x_location_error_squared + 0.07 * angle_error_squared + 0.8 * y_speed_error_squared + 0.06 * omega_error_sq  + 0.8 * y_squared_error
 
         return termination_error + transition_error
 
@@ -147,7 +150,7 @@ class Optimize:
     def __init__(self, simulation):
         self.simulation = simulation
         self.parameters = simulation.controller.parameters()
-        self.optimizer = optim.LBFGS(self.parameters, lr=0.0075)
+        self.optimizer = optim.LBFGS(self.parameters, lr=0.012)
 
     def step(self):
         def closure():
@@ -205,7 +208,7 @@ class Optimize:
         plt.show()
 
 
-T = 20
+T = 25
 dim_input = 6
 dim_hidden = 12
 dim_output = 2
@@ -213,4 +216,4 @@ d = Dynmaics()
 c = Controller(dim_input, dim_hidden, dim_output)
 s = Simulation(c, d, T)
 o = Optimize(s)
-o.train(200)
+o.train(230)
