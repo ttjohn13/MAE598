@@ -115,12 +115,12 @@ class Simulation(nn.Module):
 
     @staticmethod
     def initialize_state():
-        y = np.random.normal(1.0, 0.05, 5)
-        y_dot = np.random.rand(5) * -0.005
-        x = np.random.normal(0., 0.05, 5)
-        x_dot = np.random.normal(0., 0.005, 5)
-        theta = np.random.normal(0., 0.1, 5)
-        omega = np.random.normal(0., 0.05, 5)
+        y = np.random.normal(1.0, 0.05, 6)
+        y_dot = np.random.rand(8) * -0.005
+        x = np.random.normal(0., 0.05, 8)
+        x_dot = np.random.normal(0., 0.005, 8)
+        theta = np.random.normal(0., 0.1, 8)
+        omega = np.random.normal(0., 0.05, 8)
         state = np.zeros((len(y), 6))
         for i in range(len(y)):
             state[i, :] = [y[i], y_dot[i], x[i], x_dot[i], theta[i], omega[i]]# need initial conditions
