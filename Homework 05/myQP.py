@@ -6,10 +6,11 @@ def myQP(x, W, df, g, dg):
     A0 = dg(x)
     b0 = g(x)
     c = df(x)
-    mu0 = np.zeros((b0.shape[0], 1))  #TODO check where mu0 and mu should be used
     mu = []
     active = []
     while True:
+        mu0 = np.zeros((b0.shape[0], 1))  # TODO check where mu0 and mu should be used
+
         if len(active) == 0:
             M = W
             smu = np.matmul(np.linalg.inv(M), -c)
@@ -20,8 +21,9 @@ def myQP(x, W, df, g, dg):
             A = A0[active, :]
             b = b0[active]
             s, mu = solve_activeset(x, W, c, A, b)
+            mu0[active] = mu[active]
 
-        contstraints_ceeck = np.round((np.matmul(A0, s.reshape(-1, 1)) + b0))
+        contstraints_check = np.round(((np.matmul(A0, s) + b0) * 1e12)) / 1e12
         mu_check = 0
         if len(mu) == 0:
             mu_check = 1
@@ -32,11 +34,11 @@ def myQP(x, W, df, g, dg):
             mu.remove(min(mu))
             active.pop(id_mu)
 
-        if np.max(contstraints_ceeck) <= 0:
+        if np.max(contstraints_check) <= 0:
             if mu_check == 1:
-                return s, mu
+                return s, mu0
         else:
-            index = np.argmax(contstraints_ceeck)
+            index = np.argmax(contstraints_check)
             active.append(index)
             active = np.unique(np.array(active)).tolist()
 
@@ -48,6 +50,6 @@ def solve_activeset(x, W, c, A, b):
     U = np.vstack((-c, -b))
     sol = np.matmul(np.linalg.inv(M), U)
 
-    s = sol[: len(x)]
-    mu = sol[len(x):]
+    s = sol[: len(x)].reshape(1, -1)
+    mu = sol[len(x):].reshape(1, -1)
     return s, mu
