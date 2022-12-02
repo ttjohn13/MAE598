@@ -9,7 +9,7 @@ def myQP(x, W, df, g, dg):
     mu = []
     active = []
     while True:
-        mu0 = np.zeros((b0.shape[0], 1))  # TODO check where mu0 and mu should be used
+        mu0 = np.zeros((b0.shape[0], 1))
 
         if len(active) == 0:
             M = W
@@ -50,6 +50,6 @@ def solve_activeset(x, W, c, A, b):
     U = np.vstack((-c, -b))
     sol = np.matmul(np.linalg.inv(M), U)
 
-    s = sol[: len(x)].reshape(1, -1)
-    mu = sol[len(x):].reshape(1, -1)
+    s = sol[: len(x)]
+    mu = sol[len(x):]
     return s, mu
